@@ -160,7 +160,7 @@ int main(void)
                         }
                         total += sent;
                     }
-                    close(fd);
+                    // close(fd);
                     client_fds[i] = -1;
                 }
             }
