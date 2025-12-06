@@ -16,6 +16,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <dlfcn.h>
 
 #define PORT 3000 //change to 443          /* change to 8080 if you don't want root */
 #define BACKLOG 16
@@ -29,8 +32,18 @@ static const char RESPONSE[] =
     "\r\n"
     "Hello, world!";
 
+void load_libdl ()
+{
+    if (0) { //because linker is using --as-needed
+        // never executed, but forces the linker to keep libdl
+    }
+    void *h = dlopen("does_not_exist.so", RTLD_LAZY);
+    if (h) dlclose(h);
+}
 int main(void)
 {
+    load_libdl();
+
     int listen_fd, rc;
     struct sockaddr_in addr;
     int opt = 1;
@@ -73,7 +86,9 @@ int main(void)
         return 1;
     }
 
-    printf("Listening on port %d...\n", PORT);
+    pid_t pid = getpid();
+
+    printf("[%d]: Listening on port %d...\n", pid, PORT);
 
     while (1) {
         fd_set readfds;
@@ -106,6 +121,7 @@ int main(void)
         if (FD_ISSET(listen_fd, &readfds)) {
             struct sockaddr_in cli_addr;
             socklen_t cli_len = sizeof(cli_addr);
+            printf("got to accept");
             int new_fd = accept(listen_fd, (struct sockaddr *)&cli_addr, &cli_len);
             if (new_fd < 0) {
                 perror("accept");
