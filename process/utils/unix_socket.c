@@ -56,8 +56,6 @@ int initiate_unix_socket()
 
 int listen_to_unix_socket(int fd) {
     int client_fd;
-    // char buf[100];
-    // int rc;
 
     if (listen(fd, 5) == -1) {
         perror("listen");

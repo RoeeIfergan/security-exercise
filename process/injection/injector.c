@@ -414,6 +414,8 @@ static void inject_so_into_process(pid_t pid, const char *so_path) {
 // public entry point (called from your main.c)
 // ---------------------------------------------------------------------
 
+//TODO change /tmp/inject.so permissions to 777
+
 void inject(pid_t pid) {
     const char *so_path = "/tmp/inject.so";
 

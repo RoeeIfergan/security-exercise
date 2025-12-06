@@ -15,6 +15,8 @@ add_executable(process main.c
         utils/helpers.h
         utils/unix_socket.c
         utils/unix_socket.h
+        connection_management.c
+        connection_management.h
 )
 
 target_compile_options(process PRIVATE -Wall -Wextra)

@@ -4,9 +4,12 @@
 #include <sys/ptrace.h>
 #include <string.h>
 #include "injection/injector.h"
+#include <unistd.h>
+
 
 #include "./utils/identify_listening_process_details.h"
 #include "./utils/unix_socket.h"
+
 
 int main(int argc, char **argv) {
     unsigned long long remoteLib, localLib;
@@ -38,6 +41,10 @@ int main(int argc, char **argv) {
 
     fprintf(stdout, "Connection to client fd from unix socket! %d", client_fd);
 
+    while (1) {
+        sleep(1);
+        fprintf(stdout, "Slept for 1 second %d", client_fd);
+    }
     // Load libdl in our own process
     // libdlAddr = dlopen("libdl.so.2", RTLD_LAZY);
     // if (libdlAddr == NULL) {
