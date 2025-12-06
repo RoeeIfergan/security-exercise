@@ -1,6 +1,45 @@
-#include "helpers.h"
 
 #include <stdarg.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+#include "helpers.h"
+
+struct timer_data {
+    unsigned int seconds;
+    callback_t cb;
+    void *arg;
+};
+
+static void *timer_thread(void *ptr) {
+    struct timer_data *data = ptr;
+
+    sleep(data->seconds);
+    data->cb(data->arg);
+
+    free(data);
+    return NULL;
+}
+
+int set_timeout(unsigned int seconds, callback_t cb, void *arg) {
+    pthread_t tid;
+    struct timer_data *data = malloc(sizeof(*data));
+    if (!data) return -1;
+
+    data->seconds = seconds;
+    data->cb = cb;
+    data->arg = arg;
+
+    if (pthread_create(&tid, NULL, timer_thread, data) != 0) {
+        free(data);
+        return -1;
+    }
+
+    pthread_detach(tid);
+
+    return 0;
+}
 
 void debug_print(
     FILE* stream,

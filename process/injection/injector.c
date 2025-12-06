@@ -16,6 +16,8 @@
 
 #include "injector.h"
 
+#include "../utils/helpers.h"
+
 // ---------------------------------------------------------------------
 // /proc/<pid>/maps helpers
 // ---------------------------------------------------------------------
@@ -49,23 +51,23 @@ unsigned long long findLibrary(const char *library, pid_t pid) {
     return addr;
 }
 
-int has_mapping(pid_t pid, const char *needle) {
+int has_mapping(pid_t pid, const char *lib_name) {
     char path[64];
     char line[512];
-    FILE *fp;
+    FILE *fileP;
 
     snprintf(path, sizeof(path), "/proc/%d/maps", pid);
-    fp = fopen(path, "r");
-    if (!fp) return 0;
+    fileP = fopen(path, "r");
+    if (!fileP) return 0;
 
     int found = 0;
-    while (fgets(line, sizeof(line), fp)) {
-        if (strstr(line, needle)) {
+    while (fgets(line, sizeof(line), fileP)) {
+        if (strstr(line, lib_name)) {
             found = 1;
             break;
         }
     }
-    fclose(fp);
+    fclose(fileP);
     return found;
 }
 
@@ -176,14 +178,21 @@ int set_regs(pid_t pid, const struct user_pt_regs *regs) {
 // Works if dlopen lives in libdl (older glibc) or in libc (modern glibc).
 // ---------------------------------------------------------------------
 
-int resolve_remote_dlopen(pid_t pid, void **remote_func_out) {
-    if (!is_dynamic_process(pid)) {
-        fprintf(stderr, "[!] Target %d appears to be static; no loader present.\n", pid);
+typedef struct
+{
+    void * lib_handle;
+    const char *lib_name;
+    void *dlopen;
+} dlopen_info;
+
+int get_local_dlopen(dlopen_info * dlopen_struct)
+{
+    if (!dlopen_struct)
+    {
         return -1;
     }
 
     void *local_lib_handle = NULL;
-    const char *local_lib_name = NULL;
     void *local_dlopen = NULL;
 
     // 1. Prefer libc.so.6 (modern glibc: dlopen lives here)
@@ -191,45 +200,81 @@ int resolve_remote_dlopen(pid_t pid, void **remote_func_out) {
     if (local_lib_handle) {
         local_dlopen = dlsym(local_lib_handle, "dlopen");
         if (local_dlopen) {
-            local_lib_name = "libc.so.6";
-            goto got_local;
+
+            dlopen_struct->lib_handle = local_lib_handle;
+            dlopen_struct->dlopen = local_dlopen;
+            dlopen_struct->lib_name = "libc.so.6";
+
+            debug_print(stderr, "[V]: Loaded libc.so.6 successfully!");
+            return 0;
         }
     }
 
-    // 2. Fallback: libdl.so.2 (older glibc setups)
+    debug_print(stderr, "[?]: Failed to load libc.so.6, trying fallback (libdl.so.2)");
+
     local_lib_handle = dlopen("libdl.so.2", RTLD_LAZY);
     if (!local_lib_handle) {
         fprintf(stderr,
-                "[!] Could not open libc.so.6 or libdl.so.2: %s\n",
+                "[X] Could not open libc.so.6 or libdl.so.2: %s\n",
                 dlerror());
         return -1;
     }
+
     local_dlopen = dlsym(local_lib_handle, "dlopen");
+
     if (!local_dlopen) {
-        fprintf(stderr, "[!] dlsym(\"dlopen\") failed: %s\n", dlerror());
+        fprintf(stderr, "[X] dlsym(\"dlopen\") failed: %s\n", dlerror());
         return -1;
     }
-    local_lib_name = "libdl.so.2";
 
-    got_local:
+    dlopen_struct->lib_handle = local_lib_handle;
+    dlopen_struct->dlopen = local_dlopen;
+    dlopen_struct->lib_name = "libdl.so.2";
+
+    debug_print(stderr, "[V]: Loaded libdl.so.2 successfully!");
+
+    return 0;
+}
+
+int resolve_remote_dlopen(pid_t pid, void **remote_func_out) {
+    if (!is_dynamic_process(pid)) {
+        fprintf(stderr, "[X] Target %d appears to be static; no loader present.\n", pid);
+        return -1;
+    }
+
+    dlopen_info * local_dlopen = (dlopen_info*) malloc(sizeof(dlopen_info));
+
+    if (local_dlopen == NULL) {
+        fprintf(stderr, "[X] Failed to allocate memory for dlopen_info!\n");
+        return -1;
+    }
+
+    if (get_local_dlopen(local_dlopen) == -1) {
+        fprintf(stderr, "[X] Failed to load local dlopen!\n");
+        free(local_dlopen);
+
+        return -1;
+    }
+
     // 3. Get base of that library in our own process using /proc/self/maps.
-    unsigned long long local_lib_base = findLibrary(local_lib_name, -1);
+    unsigned long long local_lib_base = findLibrary(local_dlopen->lib_name, -1);
     if (!local_lib_base) {
-        fprintf(stderr, "[!] Could not find %s base in self.\n", local_lib_name);
+        fprintf(stderr, "[!] Could not find %s base in self.\n", local_dlopen->lib_name);
+        free(local_dlopen);
         return -1;
     }
 
-    printf("[*] local dlopen lib:   %s\n", local_lib_name);
-    printf("[*] local dlopen:       %p\n", local_dlopen);
+    printf("[*] local dlopen lib:   %s\n", local_dlopen->lib_name);
+    printf("[*] local dlopen:       %p\n", local_dlopen->dlopen);
     printf("[*] local dlopen base:  0x%llx\n", local_lib_base);
 
     unsigned long long offset =
-        (unsigned long long)(uintptr_t)local_dlopen - local_lib_base;
+        (unsigned long long)(uintptr_t)local_dlopen->dlopen - local_lib_base;
 
     // 4. In the target, find the corresponding library and add the offset.
     unsigned long long remote_lib_base = 0;
 
-    if (strcmp(local_lib_name, "libc.so.6") == 0) {
+    if (strcmp(local_dlopen->lib_name, "libc.so.6") == 0) {
         // In /proc/<pid>/maps it might appear as "libc.so.6" or "libc-2.xx.so"
         remote_lib_base = findLibrary("libc.so.6", pid);
         if (!remote_lib_base) remote_lib_base = findLibrary("libc.so", pid);
@@ -242,7 +287,8 @@ int resolve_remote_dlopen(pid_t pid, void **remote_func_out) {
 
     if (!remote_lib_base) {
         fprintf(stderr, "[!] Could not find matching %s in target process.\n",
-                local_lib_name);
+                local_dlopen->lib_name);
+        free(local_dlopen);
         return -1;
     }
 
@@ -252,6 +298,8 @@ int resolve_remote_dlopen(pid_t pid, void **remote_func_out) {
     printf("[*] remote dlopen addr: %p\n", remote_dlopen);
 
     *remote_func_out = remote_dlopen;
+
+    free(local_dlopen);
     return 0;
 }
 

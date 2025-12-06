@@ -8,12 +8,13 @@ add_executable(process main.c
         utils/identify_listening_process_details.h
         injection/injector.c
         injection/injector.h
-        injection/inject_payload.c
         injection/utils/got_injection.c
         injection/utils/got_injection.h
         utils/envs.h
         utils/helpers.c
         utils/helpers.h
+        utils/unix_socket.c
+        utils/unix_socket.h
 )
 
 target_compile_options(process PRIVATE -Wall -Wextra)
@@ -25,6 +26,8 @@ add_library(payload SHARED
         utils/envs.h
         utils/helpers.c
         utils/helpers.h
+        utils/unix_socket.c
+        utils/unix_socket.h
 )
 set_target_properties(payload PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "/tmp"

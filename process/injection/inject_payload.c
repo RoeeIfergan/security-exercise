@@ -12,7 +12,9 @@
 #include <link.h>
 #include <stdlib.h>
 
-#include "utils/got_injection.h"
+#include "../utils/unix_socket.h"
+#include "./utils/got_injection.h"
+#include "../utils/helpers.h"
 
 static int (*real_printf)(const char *fmt, ...) = NULL;
 
@@ -43,11 +45,23 @@ static int my_printf(const char *fmt, ...)
 }
 
 /* -------- constructor -------- */
+void my_callback(void *arg) {
+    fprintf(stderr, "connection to unix-socket..\n");
+    int unix_socket_fd = connect_to_unix_socket();
+    fprintf(stderr, "connected to unix-socket!\n");
+
+    fprintf(stderr, "[libhook] created unix-socket! fd=%d\n", unix_socket_fd);
+}
 
 __attribute__((constructor))
 static void injected_init(void)
 {
     fprintf(stderr, "[libhook] constructor in pid=%d\n", getpid());
+
+    set_timeout(5, my_callback, NULL);
+    // int unix_socket_fd = initiate_unix_socket();
+
+    //sleep(5);
 
     if (hook_plt_symbol("printf", (void *)my_printf,
                         (void **)&real_printf) == 0) {
@@ -57,4 +71,8 @@ static void injected_init(void)
     } else {
         fprintf(stderr, "[libhook] FAILED to hook printf\n");
     }
+
+    // int client_fd = listen_to_unix_socket(unix_socket_fd);
+    //
+    // fprintf(stderr, "[libhook] Listening to unix-socket! fd=%d\n", client_fd);
 }
