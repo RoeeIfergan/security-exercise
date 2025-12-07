@@ -23,7 +23,7 @@ Run `ninja -v process`. Output will be `./process`
 cd ../../web-server/cmake-build-debug
 ```
 ### Web Server compilation
-Run `ninja -v ???`. Output will be `./web_server`
+Run `ninja -v web_server`. Output will be `./web_server`
 
 ## Client mock
 ```
