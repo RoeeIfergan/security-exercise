@@ -35,6 +35,9 @@ add_library(payload SHARED
         injection/utils/hooks/hook_global_state.h
         injection/utils/hooks/hook_read.c
         injection/utils/hooks/hook_read.h
+        injection/utils/hooks/hook_global_state.c
+        injection/utils/connection_storage.c
+        injection/utils/connection_storage.h
 )
 set_target_properties(payload PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "/tmp"

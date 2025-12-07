@@ -155,7 +155,7 @@ int main(void)
 
             if (FD_ISSET(fd, &readfds)) {
                 char buf[1024];
-                ssize_t n = recv(fd, buf, sizeof(buf) - 1, 0);
+                ssize_t n = recv(fd, buf, sizeof(buf), 0);
                 if (n <= 0) {
                     /* error or client closed */
                     if (n < 0) {
@@ -165,19 +165,27 @@ int main(void)
                     close(fd);
                     client_fds[client_index] = -1;
                 } else {
-                    /* We ignore the request contents and always send same response */
+                    /* Print what we got (not NUL-terminated, so use fwrite) */
+                    fprintf(stderr, "[web server, fd=%d] received %zd bytes: ", fd, n);
+                    fwrite(buf, 1, n, stderr);
+                    fprintf(stderr, "\n");
+
+                    /* Echo back exactly what we received */
                     ssize_t total = 0;
-                    ssize_t len = (ssize_t)strlen(RESPONSE);
-                    while (total < len) {
-                        ssize_t sent = send(fd, RESPONSE + total, len - total, 0);
+                    while (total < n) {
+                        ssize_t sent = send(fd, buf + total, n - total, 0);
                         if (sent <= 0) {
                             perror("send");
+                            printf("Closing fd=%d due to send error\n", fd);
+                            close(fd);
+                            client_fds[client_index] = -1;
                             break;
                         }
                         total += sent;
                     }
-                    // close(fd);
-                    client_fds[client_index] = -1;
+                    /* IMPORTANT: do NOT close(fd) here, and do NOT set client_fds[...] = -1
+                     * if send succeeded — we want to keep the connection open.
+                     */
                 }
             }
         }

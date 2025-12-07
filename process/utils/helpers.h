@@ -1,9 +1,8 @@
 #ifndef PROCESS_HELPERS_H
 #define PROCESS_HELPERS_H
 
+#include "envs.h"
 #include <stdio.h>
-
-#define DEBUG 0
 
 typedef void (*callback_t)(void *);
 
