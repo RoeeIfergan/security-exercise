@@ -9,6 +9,19 @@
 #include "./utils/unix_socket.h"
 
 #define PORT 3000
+
+/*
+ * =============
+ *  Known Issue
+ * =============
+ *
+ * Currently the server can only attach to a single process. Meaning that this won't work on
+ * web servers that use multiple processes.
+ *
+ * To fix this we just need to find all the pids that are listening on port 3000 (easy fix to the identify stage)
+ * For each of the processes run the logic in main
+ */
+
 int main() {
     /*
      *  Disable buffering for stdout so all prints to stdout don't need to be flushed afterwards

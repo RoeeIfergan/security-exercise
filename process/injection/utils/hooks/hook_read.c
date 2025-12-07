@@ -8,8 +8,6 @@
 #include <sys/socket.h>
 #include <dlfcn.h>
 
-#include <errno.h>
-
 #include "hook_global_state.h"
 #include "../../../utils/helpers.h"
 
@@ -54,10 +52,6 @@ ssize_t my_recv_with_stash(int sock_fd, void *buffer, size_t len, int flags)
         return -1;
     }
     total += (size_t)bytes_read;
-
-    // 3) Print the concatenated data (stash first, then network)
-    //    NOTE: This assumes data is printable / string-like.
-    //    If it's binary, use fwrite instead.
 
     return (ssize_t)total;
 }
@@ -110,13 +104,5 @@ ssize_t my_recv(int sock_fd, void *buffer, size_t len, int flags)
 
     }
 
-    // // Example: print first line without messing up the buffer
-    // // (make a copy so you don't break the app's data)
-    // char tmp[256];
-    // ssize_t copy = n < (ssize_t)(sizeof(tmp)-1) ? n : (ssize_t)(sizeof(tmp)-1);
-    // memcpy(tmp, buffer, copy);
-    // tmp[copy] = '\0';
-    // debug_print(stdout, "[hooked recv] data (truncated): %s\n", tmp);
-
-    return total_read_bytes; // app still sees original data
+    return total_read_bytes;
 }

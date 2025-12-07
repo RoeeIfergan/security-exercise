@@ -7,7 +7,6 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdio.h>
-#include <sys/stat.h>
 #include "helpers.h"
 #include <errno.h>
 
@@ -60,7 +59,7 @@ ssize_t read_n(int fd, void *buf, size_t n) {
             if (errno == EINTR) {
                 continue;   // interrupted by signal, retry
             }
-            return -1;      // real error
+            return -1;  // error
         }
         total += r;
     }

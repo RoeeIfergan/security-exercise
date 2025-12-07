@@ -14,8 +14,6 @@
 
 #define SOCKET_PATH "/tmp/inject_unix_socket"
 
-//TODO: currently server can have 1 single client. what happens if the web server has multiple processes? ..
-
 int initiate_unix_socket()
 {
     int unix_socket_fd;
@@ -67,22 +65,9 @@ int listen_to_unix_socket(const int unix_socket_fd) {
         perror("accept");
         close(unix_socket_fd);
         return -1;
-        // exit(EXIT_FAILURE);
     }
 
     return client_fd;
-    // rc = read(client_fd, buf, sizeof(buf) - 1);
-    // if (rc > 0) {
-    //     buf[rc] = '\0';
-    //     printf("Server received: %s\n", buf);
-    // } else if (rc == -1) {
-    //     perror("read");
-    // }
-    //
-    // close(client_fd);
-    // close(fd);
-    // unlink(SOCKET_PATH);
-    // return 0;
 }
 
 int connect_to_unix_socket() {
@@ -105,24 +90,14 @@ int connect_to_unix_socket() {
         close(fd);
         return -1;
     }
-
-    // const char *msg = "hello via unix socket";
-    // if (write(fd, msg, strlen(msg)) == -1) {
-    //     perror("write");
-    // }
-
     return fd;
-    // close(fd);
-    // return 0;
 }
 
 
 int send_fd_over_unix_socket(const int unix_socket, int fd_to_send, char * buffer, const size_t buffer_size) {
     struct msghdr msg = {0};
     struct iovec iov;
-    // char buf[1] = {0};  // TODO: pass read data here
 
-    // Set up normal data (at least 1 byte)
     iov.iov_base = buffer;
     iov.iov_len  = buffer_size;
     msg.msg_iov  = &iov;
@@ -146,7 +121,7 @@ int send_fd_over_unix_socket(const int unix_socket, int fd_to_send, char * buffe
     // Copy fd into the ancillary data
     memcpy(CMSG_DATA(cmsg), &fd_to_send, sizeof(int));
 
-    // Important: set msg_controllen to the actual length used
+    // set msg_controllen to the actual length used
     msg.msg_controllen = sizeof(cmsgbuf);
 
     if (sendmsg(unix_socket, &msg, 0) == -1) {
@@ -162,7 +137,7 @@ ssize_t recv_fd_over_unix_socket(
     size_t expected_len)
 {
     size_t total_received_bytes = 0;
-    int have_read_incoming_fd = 0;          // did we already parse SCM_RIGHTS?
+    int have_read_incoming_fd = 0;
 
     if (received_fd) {
         *received_fd = -1;
@@ -225,43 +200,3 @@ ssize_t recv_fd_over_unix_socket(
 
     return (ssize_t)total_received_bytes;
 }
-// ssize_t recv_fd_over_unix_socket(
-//     const int unix_socket,
-//     int * received_fd,
-//     void *buffer,
-//     const size_t buffer_size)
-// {
-//     struct msghdr msg = {0};
-//     struct iovec iov;
-//
-//     iov.iov_base = buffer;
-//     iov.iov_len  = buffer_size;
-//
-//     msg.msg_iov  = &iov;
-//     msg.msg_iovlen = 1;
-//
-//     char cmsgbuf[CMSG_SPACE(sizeof(int))];
-//     msg.msg_control = cmsgbuf;
-//     msg.msg_controllen = sizeof(cmsgbuf);
-//
-//     ssize_t amount_of_bytes_read = recvmsg(unix_socket, &msg, 0);
-//     if (amount_of_bytes_read == -1) {
-//         return -1;
-//     }
-//
-//     struct cmsghdr *cmsg;
-//     for (cmsg = CMSG_FIRSTHDR(&msg);
-//          cmsg != NULL;
-//          cmsg = CMSG_NXTHDR(&msg, cmsg)) {
-//
-//         if (cmsg->cmsg_level == SOL_SOCKET &&
-//             cmsg->cmsg_type  == SCM_RIGHTS) {
-//
-//             memcpy(received_fd, CMSG_DATA(cmsg), sizeof(int));
-//             break;
-//             }
-//          }
-//
-//     return amount_of_bytes_read;
-// }
-

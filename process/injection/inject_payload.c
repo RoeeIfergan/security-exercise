@@ -25,12 +25,15 @@ void initialize_icp(void *arg) {
 
     int * web_server_fd = (int*) calloc(1, sizeof(int));
 
-    int rc = read(unix_socket_fd, web_server_fd, sizeof(*web_server_fd));
-    char buf[100];
+    if (!web_server_fd) {
+
+    }
+    const int rc = read(unix_socket_fd, web_server_fd, sizeof(*web_server_fd));
 
     if (rc > 0) {
-        buf[rc] = '\0';
-        printf("Server received: %s\n", buf);
+        web_server_fd[rc] = '\0';
+        //TODO: Fix prints!!
+        printf("Server received listening socket: %d\n", *web_server_fd);
     } else if (rc == -1) {
         perror("read");
     }
@@ -76,7 +79,7 @@ static void injected_init(void)
     set_timeout(2, initialize_icp, NULL);
 
     if (hook_plt_symbol("accept", (void *)hooked_accept, (void **)&real_accept) == 0) {
-        fprintf(stderr,
+        fprintf(stdout,
                 "[libhook] GOT hook for accept installed, real_accept=%p\n",
                 real_accept);
     } else {
@@ -84,7 +87,7 @@ static void injected_init(void)
     }
 
     if (hook_plt_symbol("recv", (void *)my_recv, (void **)&real_recv) == 0) {
-        fprintf(stderr, "[libhook] GOT hook for recv installed, real_recv=%p\n", real_recv);
+        fprintf(stdout, "[libhook] GOT hook for recv installed, real_recv=%p\n", real_recv);
     } else {
         fprintf(stderr, "[libhook] FAILED to hook recv\n");
     }

@@ -37,8 +37,6 @@ static inline int bit_test(const unsigned long *bits, size_t bit) {
     return (bits[WORD_INDEX(bit)] & BIT_MASK(bit)) != 0;
 }
 
-/* ----- API implementation ----- */
-
 int fdt_init(FdTable *t, size_t max_fds)
 {
     if (!t || max_fds == 0) {

@@ -136,13 +136,13 @@ static int set_pid_and_fd(const unsigned long inode, fd_details * listening_proc
 
                 const long int listening_fd = strtol(fd_ent->d_name, &endptr, 10);
                 if (endptr == fd_ent->d_name || *endptr != '\0') {
-                    fprintf(stderr, "Invalid web server FD found!.\n");
+                    fprintf(stderr, "[Web server identification] Invalid web server FD found!.\n");
                 } else {
                     listening_process_details->fd = (int) listening_fd;
                 }
 
                 found_pid = 1;
-                printf("PID: %d (inode %lu)\n", pid, inode);
+                printf("[Web server identification] PID: %d (inode %lu)\n", pid, inode);
             }
         }
 

@@ -1,11 +1,6 @@
-//
-// Created by root on 12/7/25.
-//
-
 #ifndef PROCESS_CONNECTION_STORAGE_H
 #define PROCESS_CONNECTION_STORAGE_H
 
-#include <stdint.h>
 #include <stddef.h>
 
 #include "../../connection_management.h"
@@ -28,16 +23,12 @@ int  fdt_init(FdTable *t, size_t max_fds);
 /* Initialize using RLIMIT_NOFILE (soft limit) */
 int  fdt_init_from_rlimit(FdTable *t);
 
-/* Free resources */
 void fdt_free(FdTable *t);
 
-/* Set metadata for fd (copies 10 bytes). Returns 0 on success, -1 on error. */
 int  fdt_set(FdTable *t, int fd, const FD_Data);
 
-/* Get pointer to metadata for fd, or NULL if none / invalid fd. */
 FdMeta *fdt_get(FdTable *t, int fd);
 
-/* Remove metadata for fd (mark unused). Safe on invalid fd. */
 void fdt_remove(FdTable *t, int fd);
 
 int  fdt_pop(FdTable *t, int fd, FD_Data);
