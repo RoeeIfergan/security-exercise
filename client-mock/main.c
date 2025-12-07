@@ -10,7 +10,7 @@
 
 #define HOME_IDENTIFIER "HOME_IDENTIFIER\n"
 #define HOST "127.0.0.1"
-#define PORT 3000
+#define PORT 443
 #define BUF_SIZE 1024
 
 int is_home_connection() {

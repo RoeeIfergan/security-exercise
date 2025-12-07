@@ -10,11 +10,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "utils/envs.h"
 #include "utils/helpers.h"
 #include "utils/unix_socket.h"
 
-
-#define PORT 3000 //change to 443
 #define BACKLOG 16
 #define MAX_CLIENTS FD_SETSIZE
 #define HOME_MSGS_SIZE 100

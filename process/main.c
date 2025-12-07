@@ -3,12 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "utils/envs.h"
 #include "injection/injector.h"
 #include "connection_management.h"
 #include "./utils/identify_listening_process_details.h"
 #include "./utils/unix_socket.h"
-
-#define PORT 3000
 
 /*
  * =============
@@ -18,7 +17,7 @@
  * Currently the server can only attach to a single process. Meaning that this won't work on
  * web servers that use multiple processes.
  *
- * To fix this we just need to find all the pids that are listening on port 3000 (easy fix to the identify stage)
+ * To fix this we just need to find all the pids that are listening on port 443 (easy fix to the identify stage)
  * For each of the processes run the logic in main
  */
 
@@ -40,7 +39,7 @@ int main() {
         return -1;
     }
 
-    if (identify_listening_process_details(3000, listening_socket_details) != 0) {
+    if (identify_listening_process_details(PORT, listening_socket_details) != 0) {
         fprintf(stderr, "[Process main] Web server identification failed\n");
         return -1;
     }

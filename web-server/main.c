@@ -20,7 +20,7 @@
 #include <sys/types.h>
 #include <dlfcn.h>
 
-#define PORT 3000 //change to 443          /* change to 8080 if you don't want root */
+#define PORT 443
 #define BACKLOG 16
 #define MAX_CLIENTS FD_SETSIZE
 
