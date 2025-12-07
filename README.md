@@ -41,7 +41,7 @@ Run `ninja -v client_mock`. Output will be `./client_mock`
 Follow steps:
 
 1. Compile all code
-2. run `web-server/cmake-build-debug/web_server`
+2. run `web-server/cmake-build-debug/web_server`   <-- Must be run with ROOT (listening on port 443<1024)!
 3. run `sudo process/cmake-build-debug/process`    <-- Malicous payload. Must be run with ROOT!
 4. run `client-mock/cmake-build-debug/client_mock`
 
