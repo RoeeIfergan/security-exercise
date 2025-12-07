@@ -1,5 +1,7 @@
 #define _GNU_SOURCE
 
+#include "injector.h"
+
 #include <elf.h>        // NT_PRSTATUS
 #include <dlfcn.h>      // dlopen, dlsym
 #include <errno.h>
@@ -9,20 +11,23 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <sys/uio.h>    // struct iovec
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/ptrace.h>
 #include <asm/ptrace.h> // struct user_pt_regs (AArch64)
 
-#include "injector.h"
-
 #include "../utils/helpers.h"
+
+#define SO_PATH "/tmp/inject.so"
 
 // ---------------------------------------------------------------------
 // /proc/<pid>/maps helpers
 // ---------------------------------------------------------------------
 
-// Find base address of a mapping whose line contains `library` substring.
+/*
+ *  Find base address of a mapping whose line contains `library` substring.
+ */
 unsigned long long findLibrary(const char *library, pid_t pid) {
     char mapFilename[128];
     char buffer[4096];
@@ -51,6 +56,9 @@ unsigned long long findLibrary(const char *library, pid_t pid) {
     return addr;
 }
 
+/*
+ *  Check if lib_name is dynamically linked by a process.
+ */
 int has_mapping(pid_t pid, const char *lib_name) {
     char path[64];
     char line[512];
@@ -71,8 +79,16 @@ int has_mapping(pid_t pid, const char *lib_name) {
     return found;
 }
 
-// Rough heuristic: if ld-linux is mapped, process is dynamically linked.
 int is_dynamic_process(pid_t pid) {
+    /*
+     *  Currently this inject strategy requires dlopen to exist in remote process's
+     *  memory. has_mapping() checks if a library is dynamically linked by a process.
+     *
+     *  So we take our check both of the requirements, is dlopen dynamically linked?
+     *  if so, then this process is dynamically linked
+     *  if not, this process isn't dynamically linked and doesn't have dlopen
+     *  as a dynamically linked lib, therefore this injection won't work and we return 0
+     */
     if (has_mapping(pid, "ld-linux") || has_mapping(pid, "/ld-")) {
         return 1;
     }
@@ -236,7 +252,7 @@ int get_local_dlopen(dlopen_info * dlopen_struct)
     return 0;
 }
 
-int resolve_remote_dlopen(pid_t pid, void **remote_func_out) {
+int resolve_remote_dlopen(const pid_t pid, void **remote_func_out) {
     if (!is_dynamic_process(pid)) {
         fprintf(stderr, "[X] Target %d appears to be static; no loader present.\n", pid);
         return -1;
@@ -308,11 +324,10 @@ int resolve_remote_dlopen(pid_t pid, void **remote_func_out) {
 // Main injection logic for AArch64
 // ---------------------------------------------------------------------
 
-static void inject_so_into_process(pid_t pid, const char *so_path) {
+static void inject_so_into_process(pid_t pid) {
     struct user_pt_regs oldregs, regs;
     int status;
     unsigned char backup[64];
-    void *freeaddr;
     void *remote_dlopen = NULL;
 
     if (resolve_remote_dlopen(pid, &remote_dlopen) == -1) {
@@ -337,66 +352,128 @@ static void inject_so_into_process(pid_t pid, const char *so_path) {
     memcpy(&regs, &oldregs, sizeof(regs));
 
     // Choose executable region
-    freeaddr = freeSpaceAddr(pid);
-    printf("[*] Using executable region at %p for scratch\n", freeaddr);
+    void* free_adr = freeSpaceAddr(pid);
+    printf("[*] Using executable region at %p for scratch\n", free_adr);
 
-    ptraceRead(pid, (unsigned long long)freeaddr, backup, sizeof(backup));
+    ptraceRead(pid, (unsigned long long)free_adr, backup, sizeof(backup));
 
-    // Layout:
-    //   freeaddr      : so_path string (<=48 bytes)
-    //   freeaddr + 48 : BRK instruction
-    size_t path_len = strlen(so_path) + 1;
+    /*
+     *
+     *  We backed up 64 bytes sizeof(backup) at free_adr so we can
+     *  write our SO_PATH to it. This is so we can tell the cpu later
+     *  to load that file (our shared library into memory).
+     *
+     *  Layout:
+     *  free_adr        <- SO_PATH string (<=48 bytes)
+     *  free_adr + 48   <- BRK instruction
+     *
+     *  Technically, SO_PATH needs to be under 60 bytes
+     *  (BRK thats inserted afterwards is 4 bytes) but were taking
+     *  precaution. So 48 < 60 -> V.
+     *  I'm not sure if 60 bytes is actually safe on all systems :/
+     *
+     */
+
+    size_t path_len = strlen(SO_PATH) + 1;
     if (path_len > 48) {
         fprintf(stderr, "[!] so_path too long for this PoC (max 48 bytes)\n");
         exit(1);
     }
-    ptraceWrite(pid, (unsigned long long)freeaddr, so_path, (int)path_len);
+    ptraceWrite(pid, (unsigned long long)free_adr, SO_PATH, (int)path_len);
 
-    unsigned int brk_insn = 0xd4200000; // AArch64 BRK #0
-    ptraceWrite(pid, (unsigned long long)freeaddr + 48,
-                &brk_insn, sizeof(brk_insn));
+    /*
+     *  BRK Trap
+     *
+     *  Our goal:
+     *  Load the shared libarary in to memory, then exit.
+     *
+     *  We have written the shared libarary exec (above) into memory.
+     *  We need to make sure that once it finished executing, we unattach
+     *  from the process. We accomplish this by adding a
+     *  BRK instruction (breakpoint instruction), when the cpu executes it,
+     *  it will send a SIGTRAP signal to the process.
+     *  You guessed it.. We use ptrace to wait for a SIGTRAP signal and then
+     *  we detach!
+     */
 
-    // AArch64 ABI:
-    //   x0 = arg0 (path)
-    //   x1 = arg1 (mode = RTLD_LAZY = 2)
-    //   x30 = return address (BRK)
-    //   pc = dlopen address
-    regs.regs[0]  = (unsigned long long)freeaddr;
-    regs.regs[1]  = 2;
-    regs.regs[30] = (unsigned long long)freeaddr + 48;
+    unsigned int brk_instruction_trap = 0xd4200000; // AArch64 BRK #0
+    ptraceWrite(pid, (unsigned long long)free_adr + 48,
+                &brk_instruction_trap, sizeof(brk_instruction_trap));
+
+    /*
+     *  AArch64 ABI (Application Binary Interface)
+     *
+     *  Actual shared library injection:
+     *  Run the SO_PATH using the dlopen in the remote program's memory
+     *  pc = dlopen address     <-- Next instruction to execute
+     *  x0 = arg0 (SO_PATH)     <-- Shared libarary exec
+     *  x1 = arg1 (mode = RTLD_LAZY = 2)    <-- Load shared library, resolve symbols when needed
+     *  x30 = return address    <-- Will Jump to the brk_instruction_trap we added
+     *
+     *
+     */
+
     regs.pc       = (unsigned long long)remote_dlopen;
+
+    regs.regs[0]  = (unsigned long long)free_adr;
+    regs.regs[1]  = 2;
+    regs.regs[30] = (unsigned long long)free_adr + 48;
 
     if (set_regs(pid, &regs) == -1) {
         exit(1);
     }
 
-    // Continue and wait for SIGTRAP from BRK
+    /*
+     *  We can't load the shared library our selfs,
+     *  What we can do is:
+     *  1. stop the process
+     *  2. inject "State" into its regs
+     *  3. resume the process (this is what loads the shared library into memory)
+     */
+
     if (ptrace(PTRACE_CONT, pid, NULL, NULL) == -1) {
         perror("PTRACE_CONT");
         exit(1);
     }
+
+    /*
+     *  Wait for a signal (This will catch our SIGTRAP produced by our BRK instruction)
+     */
 
     if (waitpid(pid, &status, WUNTRACED) == -1) {
         perror("waitpid after CONT");
         exit(1);
     }
 
+    /*
+     *  Verification & restoring backedup registers:
+     *
+     *  WIFSTOPPED(status)  <-- Verify that process stopped
+     *  WSTOPSIG(status)    <-- Which signal caused the stop
+     *  SIGTRAP     <-- The signal we inserted using BRK
+     */
     if (WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP) {
         // dlopen return in x0
         if (get_regs(pid, &regs) == -1) {
             exit(1);
         }
 
-        unsigned long long handle = regs.regs[0];
-        if (handle != 0) {
+        /*
+         *  dlopen's signature is:
+         *      void *dlopen(const char *filename, int flag);
+         *  Meaning that it needs to return a pointer if succeeded.
+         *  So we check that pointer is valid (handle != 0)
+         */
+        unsigned long long dlopen_return_value = regs.regs[0];
+        if (dlopen_return_value != 0) {
             printf("[*] Library injected successfully; handle = %p\n",
-                   (void *)handle);
+                   (void *)dlopen_return_value);
         } else {
             printf("[!] dlopen returned NULL; injection failed\n");
         }
 
         // Restore original code + regs, detach
-        ptraceWrite(pid, (unsigned long long)freeaddr, backup, sizeof(backup));
+        ptraceWrite(pid, (unsigned long long)free_adr, backup, sizeof(backup));
         if (set_regs(pid, &oldregs) == -1) {
             exit(1);
         }
@@ -416,11 +493,24 @@ static void inject_so_into_process(pid_t pid, const char *so_path) {
 
 //TODO change /tmp/inject.so permissions to 777
 
-void inject(pid_t pid) {
-    const char *so_path = "/tmp/inject.so";
+int inject(const pid_t pid) {
+    // const char *so_path = "/tmp/inject.so";
 
     printf("[*] AArch64 ptrace + dlopen-style injector\n");
-    printf("[*] Target PID: %d, SO: %s\n", pid, so_path);
+    printf("[*] Target PID: %d, SO: %s\n", pid, SO_PATH);
 
-    inject_so_into_process(pid, so_path);
+    if (inject_so_into_process(pid) == 0) {
+        fprintf(stderr, "[Injector] Failed to inject shared library\n");
+        return -1;
+    }
+
+    /*
+     *  Since were using /tmp dir, the server process might not have access to it.
+     */
+    if (chmod(SO_PATH, 0777) == -1) {
+        fprintf(stderr, "[Injector] Failed to change %s permissions. THIS PROCESS MUST RUN AS ROOT\n", SO_PATH);
+        return -1;
+    }
+
+    return 0;
 }

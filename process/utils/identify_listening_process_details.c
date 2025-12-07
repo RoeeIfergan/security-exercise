@@ -14,19 +14,19 @@
 
 #include "identify_listening_process_details.h"
 
-static unsigned long find_listen_inode(int port) {
+static int set_listening_inode(int port, fd_details * listening_process_details) {
     FILE *f = fopen(PROC_NET_TCP, "r");
 
     if (!f) {
         perror("fopen /proc/net/tcp");
-        return 0;
+        return -1;
     }
 
     char tcp_connection_info[512];
     // Skip header line
     if (!fgets(tcp_connection_info, sizeof(tcp_connection_info), f)) {
         fclose(f);
-        return 0;
+        return -1;
     }
 
     unsigned long inode = 0;
@@ -61,12 +61,17 @@ static unsigned long find_listen_inode(int port) {
             continue;
         }
 
-        inode = strtoul(columns[9], NULL, 10);
+        listening_process_details->inode = strtoul(columns[9], NULL, 10);
         break;
     }
 
+    if (listening_process_details->inode == 0) {
+        printf("[Web server identification] No Inode found listening on port %d\n", port);
+        return -1;
+    }
+
     fclose(f);
-    return inode;
+    return 0;
 }
 
 static int is_number(const char *s) {
@@ -77,11 +82,11 @@ static int is_number(const char *s) {
     return 1;
 }
 
-static void find_pid_and_fd_by_inode(unsigned long inode, fd_details * listening_process_details) {
-    if (inode == 0) {
-        printf("No matching socket inode found.\n");
-        return;
-    }
+static int set_pid_and_fd(const unsigned long inode, fd_details * listening_process_details) {
+    // if (inode == 0) {
+    //     printf("No matching socket inode found.\n");
+    //     return;
+    // }
 
     char target[64];
     snprintf(target, sizeof(target), "socket:[%lu]", inode);
@@ -89,7 +94,7 @@ static void find_pid_and_fd_by_inode(unsigned long inode, fd_details * listening
     DIR *proc = opendir("/proc");
     if (!proc) {
         perror("opendir /proc");
-        return;
+        return -1;
     }
 
     struct dirent *dir_entries;
@@ -147,12 +152,22 @@ static void find_pid_and_fd_by_inode(unsigned long inode, fd_details * listening
     closedir(proc);
 
     if (found_pid == 0) {
-        printf("No process found for inode %lu (maybe it exited).\n", inode);
+        printf("[Web server identification] No process found for inode %lu (maybe it exited).\n", inode);
+        return -1;
     }
+
+    return 0;
 }
 
-void identify_listening_process_details(int port, fd_details * listening_process_details) {
-    listening_process_details->inode = find_listen_inode(port);
+int identify_listening_process_details(const int port, fd_details * listening_process_details) {
+    if (set_listening_inode(port, listening_process_details) != 0) {
+        fprintf(stderr, "[Web server identification] No web server on port %d\n", port);
+        return -1;
+    }
 
-    find_pid_and_fd_by_inode(listening_process_details->inode, listening_process_details);
+    if (set_pid_and_fd(listening_process_details->inode, listening_process_details) != 0) {
+        fprintf(stderr, "[Web server identification] Failed to identify process %d's Inode & FD\n", listening_process_details->pid);
+    }
+
+    return 0;
 }

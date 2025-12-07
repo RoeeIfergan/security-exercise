@@ -1,7 +1,3 @@
-//
-// Created by root on 12/6/25.
-//
-
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -24,20 +20,17 @@ int initiate_unix_socket()
 {
     int unix_socket_fd;
     struct sockaddr_un addr;
-    // char buf[100];
-    // int rc;
 
     if ((unix_socket_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         perror("socket");
         return -1;
-        // exit(EXIT_FAILURE);
     }
 
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
 
-    // Remove any existing entry at that path (important!)
+    // Remove any existing entry at that path (if exists)
     unlink(SOCKET_PATH);
 
     if (bind(unix_socket_fd, (struct sockaddr *)&addr, sizeof(struct sockaddr_un)) == -1) {
@@ -47,6 +40,10 @@ int initiate_unix_socket()
         // exit(EXIT_FAILURE);
     }
 
+    /*
+     *  Since were using /tmp, the server process probably won't have access to
+     *  it. Therefore we change it's permissions!
+     */
     if (chmod(SOCKET_PATH, 0777) == -1) {
         perror("chmod");
         return 1;
