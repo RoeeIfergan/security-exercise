@@ -58,7 +58,7 @@ static int make_writable(void *addr)
 
     if (mprotect((void *)page_start, page_size,
                  PROT_READ | PROT_WRITE) != 0) {
-        perror("[libhook] mprotect");
+        debug_print(stderr, "[libhook] mprotect");
 
         return -1;
     }
@@ -163,7 +163,7 @@ static int phdr_callback(struct dl_phdr_info *info,
     elf_section_info * selection_info = (elf_section_info*) calloc(1, sizeof(elf_section_info));
 
     if (selection_info == NULL) {
-        fprintf(stderr, "[libhook] failed to allocate selection_info memory\n");
+        debug_print(stderr, "[libhook] failed to allocate selection_info memory\n");
         return 0;
     }
 
@@ -249,12 +249,12 @@ static int phdr_callback(struct dl_phdr_info *info,
 
 
         if (make_writable(got_entry) != 0) {
-            fprintf(stderr, "[libhook] failed to mprotect GOT for %s in %s\n",
+            debug_print(stderr, "[libhook] failed to mprotect GOT for %s in %s\n",
                     ctx->symbol_name, objname);
             continue;
         }
 
-        fprintf(stderr,
+        debug_print(stderr,
                 "[libhook] patching %s in %s: %p -> %p\n",
                 ctx->symbol_name, objname,
                 *got_entry, ctx->new_func);

@@ -79,7 +79,7 @@ ssize_t my_recv_with_stash(int sock_fd, void *buffer, size_t len, int flags)
 
 ssize_t my_recv(int sock_fd, void *buffer, size_t len, int flags)
 {
-    fprintf(stdout, "[read-hook] recv called\n");
+    debug_print(stdout, "[read-hook] recv called\n");
 
     if (!real_recv) {
         real_recv = (recv_f_type)dlsym(RTLD_NEXT, "recv");
@@ -90,17 +90,17 @@ ssize_t my_recv(int sock_fd, void *buffer, size_t len, int flags)
         }
     }
 
-    fprintf(stdout, "[read-hook] reading from unix socket..\n");
+    debug_print(stdout, "[read-hook] reading from unix socket..\n");
 
     ssize_t total_read_bytes = my_recv_with_stash(sock_fd, buffer, len, flags);
 
-    fprintf(stdout, "[read-hook] read from unix socket\n");
+    debug_print(stdout, "[read-hook] read from unix socket\n");
 
     if (DEBUG == 1) {
-        fprintf(stderr, "[read-hook] Read from fd=%d: ", sock_fd);
+        debug_print(stderr, "[read-hook] Read from fd=%d: ", sock_fd);
 
         fwrite(buffer, 1, total_read_bytes, stdout);
-        fprintf(stdout, "\"\n");
+        debug_print(stdout, "\"\n");
 
     }
 
