@@ -339,7 +339,7 @@ ReadReturn --> WS_proc
 
 
 
-# Refrences
+# References
 
 ### Ptrace reference:
 https://blog.xpnsec.com/linux-process-injection-aka-injecting-into-sshd-for-fun/
