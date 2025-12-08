@@ -162,13 +162,13 @@ After a few hours i had learned a lot more about ptrace functionality, shellcode
 5. Accept connections via my process, pass legit connections using the unix socket (SCM_RIGHTS) to the injected code in the web server. using my overriden functions, inject the socket when the web server calls accept().
 
 #### How was i going to solve each step?
-##### 1:
-Specified in above solutions.
 
-##### 2:
-pretty easy..
+**1 -** Specified in above solutions.
 
-##### 3:
+
+**2 -** pretty easy..
+
+**3:** 
 1. Use Ptrace to attach to the process
 2. Inject a shared library (using dlopen):
     1. find the web server's dlopen's memory address (Exists only in web server that were dynamically linked, for static linked programs a different solution exists)
@@ -185,12 +185,10 @@ pretty easy..
     1. Connect to the unix socket
     2. override (hook) the accept & read functions <-- GOT Injection
 
-##### 4:
-Detach using Ptrace.
 
-##### 5:
+**4 -** Detach using Ptrace.
 
-If all above steps are succeeded i basically have the following:
+**5 -** If all above steps are succeeded i basically have the following:
 
 ```mermaid
 flowchart LR
