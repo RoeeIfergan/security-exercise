@@ -1,4 +1,4 @@
-# Solution
+# Solution (WIP)
 
 This solution wasn't completely executed, the current code uses GOT Injections which work on dynamically linked processes and not on statically linked processes. I specify a solution for statically linked servers at the end of this file.
 
