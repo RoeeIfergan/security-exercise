@@ -203,14 +203,15 @@ static int phdr_callback(struct dl_phdr_info *info,
     Elf64_Rela *rela   = (Elf64_Rela *)selection_info->start_of_plt_relocation_table;
     size_t rela_count  = selection_info->size_of_plt_relocation_table / sizeof(Elf64_Rela);
 
-    const char *objname = (info->dlpi_name && info->dlpi_name[0])
-                              ? info->dlpi_name : "<main>";
+    const char *objname = 
+        (info->dlpi_name && info->dlpi_name[0])
+            ? info->dlpi_name : "<main>";
 
     debug_print(stderr, "[libhook] scanning object: %s\n", objname);
 
     /*
      *  For each rela entry:
-     *  1. filter out any relocation type that isn't a function (!= MY_JUMP_SLOT)
+     *  1. Filter out any relocation type that isn't a function (!= MY_JUMP_SLOT)
      *  2. Get the rela_entrie's symbol
      *  3. Get the string associated with the symbol. This string is the function name
      *  4. Filter out all functions except the one i'm looking for

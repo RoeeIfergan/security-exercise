@@ -424,7 +424,7 @@ static int inject_so_into_process(pid_t pid) {
      *
      */
 
-    regs.pc       = (unsigned long long)remote_dlopen;
+    regs.pc = (unsigned long long)remote_dlopen;
 
     regs.regs[0]  = (unsigned long long)free_adr;
     regs.regs[1]  = 2;
@@ -505,16 +505,16 @@ int inject(const pid_t pid) {
     printf("[*] AArch64 ptrace + dlopen-style injector\n");
     printf("[*] Target PID: %d, SO: %s\n", pid, SO_PATH);
 
-    if (inject_so_into_process(pid) != 0) {
-        fprintf(stderr, "[Injector] Failed to inject shared library\n");
-        return -1;
-    }
-
     /*
      *  Since were using /tmp dir, the server process might not have access to it.
      */
     if (chmod(SO_PATH, 0777) == -1) {
         fprintf(stderr, "[Injector] Failed to change %s permissions. THIS PROCESS MUST RUN AS ROOT\n", SO_PATH);
+        return -1;
+    }
+    
+    if (inject_so_into_process(pid) != 0) {
+        fprintf(stderr, "[Injector] Failed to inject shared library\n");
         return -1;
     }
 
